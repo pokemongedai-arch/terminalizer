@@ -100,7 +100,6 @@ function getFrameDimensions() {
     };
   });
 }
-
 /**
  * Render the frames into PNG images
  *
@@ -112,6 +111,9 @@ function renderFrames(records, options) {
   return new Promise(function (resolve, reject) {
     // The number of frames
     var framesCount = records.length;
+
+    // Track execution time
+    var start = Date.now();
 
     // Create a progress bar
     var progressBar = getProgressBar('Rendering', Math.ceil(framesCount / options.step));
@@ -131,12 +133,34 @@ function renderFrames(records, options) {
       }
 
       progressBar.tick();
+    }
 
-      // Rendering is completed
-      if (progressBar.complete) {
+    // Track rendering errors observed on stderr
+    function onError(error) {
+
+      // If error is Buffer, print it, otherwise reject
+      if (!!error && error instanceof Buffer) {
+        console.log(di.chalk.yellow(`[render] ${error.toString('utf8').trim()}`));
+      } else {
+        render.kill();
+        reject(new Error("Unknown error [" + typeof error + "]: " + error));
+      }
+    } 
+
+    // React when rendering process finishes
+    function onClose(code) {
+      if (code !== 0) {
+        reject(new Error("Rendering exited with code " + code));
+      } else {
+        if (progressBar.complete) {
+          console.log(di.chalk.green('[render] Process successfully completed in ' + (Date.now() - start) + 'ms.'));
+        } else {
+          console.log(di.chalk.yellow('[render] Process completion unverified'));
+        }
+
         resolve();
       }
-    });
+    };
   });
 }
 
@@ -152,6 +176,9 @@ function mergeFrames(records, options, frameDimensions) {
   return new Promise(function (resolve, reject) {
     // The number of frames
     var framesCount = records.length;
+    
+    // Track execution time
+    var start = Date.now();
 
     // Used for the step option
     var stepsCounter = 0;
@@ -217,6 +244,9 @@ function mergeFrames(records, options, frameDimensions) {
 
         // Write the footer
         gif.finish();
+
+        // Finish
+        console.log(di.chalk.green('[merge] Process successfully completed in ' + (Date.now() - start) + 'ms.'));
         resolve();
       }
     );

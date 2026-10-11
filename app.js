@@ -20,7 +20,8 @@ const { version } = JSON.parse(readFileSync(pathJoin(__dirname, './package.json'
 global.ROOT_PATH = __dirname;
 
 // The base url of the Terminalizer website
-global.BASEURL = 'https://terminalizer.com';
+// `www` is necessary due to https://github.com/faressoft/terminalizer/issues/207
+global.BASEURL = 'https://www.terminalizer.com';
 
 // Initialize yargs
 yargs
@@ -49,7 +50,7 @@ yargs
   .command(commands.render)
   .command(commands.share)
   .command(commands.generate);
-
+RLE_UNSAVED_PROBE
 // debugger;
 
 try {

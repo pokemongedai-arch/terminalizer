@@ -50,7 +50,6 @@ function isSet(input) {
  *   - Yes: use the token
  *   - No: Generate a new one and ask the user to register it
  *
- * @param  {Object}  context
  * @return {Promise}
  */
 function getToken(context) {
@@ -185,25 +184,25 @@ function shareRecording(context) {
       }
 
       // Internal server error
-      if (response.statusCode == 500) {
-        return reject(body.errors.join('\n'));
+      if (response.status === 500) {
+        throw new Error(response.data.errors.join('\n'));
       }
 
       // Invalid input
-      if (response.statusCode == 400) {
-        return reject(body.errors.join('\n'));
+      if (response.status === 400) {
+        throw new Error(response.data.errors.join('\n'));
       }
 
       // Invalid token
       if (response.statusCode == 401) {
         utility.removeToken();
         self.jump('getToken');
-        return resolve();
+        return;
       }
 
       // Unexpected error
-      if (response.statusCode != 200) {
-        return reject(new Error('Something went wrong, try again later'));
+      if (response.status !== 200) {
+        throw new Error('Something went wrong, try again later');
       }
 
       // Parse the response body

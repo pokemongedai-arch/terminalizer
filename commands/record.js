@@ -75,13 +75,13 @@ function normalizeConfig(config) {
   }
 
   // Default value for cols
-  if (is.not.number(config.json.cols)) {
-    utility.changeYAMLValue(config, 'cols', process.stdout.columns);
+  if (isNaN(config.json.cols)) {
+    di.utility.changeYAMLValue(config, 'cols', process.stdout.columns);
   }
 
   // Default value for rows
-  if (is.not.number(config.json.rows)) {
-    utility.changeYAMLValue(config, 'rows', process.stdout.rows);
+  if (isNaN(config.json.rows)) {
+    di.utility.changeYAMLValue(config, 'rows', process.stdout.rows);
   }
 
   return config;
@@ -166,25 +166,27 @@ function done(argv) {
     return;
   }
 
-  inquirer
-    .prompt([
-      {
-        type: 'confirm',
-        name: 'share',
-        message: 'Would you like to share your recording on terminalizer.com?',
-      },
-    ])
-    .then(function (answers) {
-      if (!answers.share) {
-        return;
-      }
+  di.inquirer.prompt([
+    {
+      type: "confirm",
+      name: "share",
+      message: "Would you like to share your recording on www.terminalizer.com?",
+    },
+  ]).then(function(answers) {
 
-      console.log(chalk.green("Let's now share your recording on https://terminalizer.com"));
+    if (!answers.share) {
+      return;
+    }
 
-      // Invoke the share command
-      share.handler({
-        recordingFile: recordingFile,
-      });
+    console.log(
+      di.chalk.green(
+        "Let's now share your recording on https://www.terminalizer.com"
+      )
+    );
+
+    // Invoke the share command
+    di.commands.share.handler({
+      recordingFile: recordingFile,
     });
 }
 

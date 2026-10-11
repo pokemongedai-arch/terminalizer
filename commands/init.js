@@ -34,6 +34,9 @@ function command(argv) {
   // Create the global directory
   try {
     fs.mkdirSync(utility.getGlobalDirectory());
+
+    di.fs.mkdirSync(di.utility.getGlobalDirectory(), { recursive: true });
+
   } catch (error) {
     // Ignore `already exists` error
     if (error.code != 'EEXIST') {

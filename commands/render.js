@@ -5,21 +5,14 @@
  * @author Mohammad Fares <faressoft.com@gmail.com>
  */
 
-import * as ProgressBar from 'progress';
-import * as chalk from 'chalk';
-import * as fs from 'fs';
-import * as path from 'path';
-import { PNG } from 'pngjs';
-import { spawn } from 'child_process';
-import * as electron from 'electron';
-import * as is from 'is_js';
-import * as GIFEncoder from 'gif-encoder';
-import * as async from 'async';
-import * as asyncPromises from 'async-promises';
-import * as _ from 'lodash';
-import * as utility from '../utility.js';
-import play from '../commands/play.js';
-import errorHandler from '../error-handler.js';
+const tmp = require('tmp');
+
+tmp.setGracefulCleanup();
+
+/**
+ * The directory to render the frames into
+ */
+var renderDir = tmp.dirSync({ unsafeCleanup: true }).name;
 
 /**
  * Create a progress bar for processing frames
@@ -90,7 +83,7 @@ function loadPNG(path) {
  */
 function getFrameDimensions() {
   // The path of the first rendered frame
-  var framePath = path.join(ROOT_PATH, 'render/frames/0.png');
+  var framePath = di.path.join(renderDir, "0.png");
 
   // Read and parse a PNG image file
   return loadPNG(framePath).then(function (png) {
@@ -100,7 +93,6 @@ function getFrameDimensions() {
     };
   });
 }
-
 /**
  * Render the frames into PNG images
  *
@@ -113,30 +105,60 @@ function renderFrames(records, options) {
     // The number of frames
     var framesCount = records.length;
 
+    // Track execution time
+    var start = Date.now();
+
     // Create a progress bar
     var progressBar = getProgressBar('Rendering', Math.ceil(framesCount / options.step));
 
     // Execute the rendering process
-    var render = spawn(electron, [path.join(ROOT_PATH, 'render/index.js'), options.step], { detached: false });
+    var render = di.spawn(
+      di.electron,
+      [di.path.join(ROOT_PATH, "render/index.js"), renderDir, options.step,],
+      { detached: false }
+    );
 
-    render.stderr.on('data', function (error) {
-      render.kill();
-      reject(new Error(error));
-    });
+    render.stdout.on('data', onData);
+    render.stderr.on('data', onError);
+    render.on('close', onClose); 
 
-    render.stdout.on('data', function (data) {
+    // Track progress of rendering through stdout
+    function onData(data) {
+
       // Is not a recordIndex (to skip Electron's logs or new lines)
-      if (is.not.number(parseInt(data.toString()))) {
+      if (isNaN(parseInt(data.toString()))) {
         return;
       }
 
       progressBar.tick();
+    }
 
-      // Rendering is completed
-      if (progressBar.complete) {
+    // Track rendering errors observed on stderr
+    function onError(error) {
+
+      // If error is Buffer, print it, otherwise reject
+      if (!!error && error instanceof Buffer) {
+        console.log(di.chalk.yellow(`[render] ${error.toString('utf8').trim()}`));
+      } else {
+        render.kill();
+        reject(new Error("Unknown error [" + typeof error + "]: " + error));
+      }
+    } 
+
+    // React when rendering process finishes
+    function onClose(code) {
+      if (code !== 0) {
+        reject(new Error("Rendering exited with code " + code));
+      } else {
+        if (progressBar.complete) {
+          console.log(di.chalk.green('[render] Process successfully completed in ' + (Date.now() - start) + 'ms.'));
+        } else {
+          console.log(di.chalk.yellow('[render] Process completion unverified'));
+        }
+
         resolve();
       }
-    });
+    };
   });
 }
 
@@ -152,6 +174,9 @@ function mergeFrames(records, options, frameDimensions) {
   return new Promise(function (resolve, reject) {
     // The number of frames
     var framesCount = records.length;
+    
+    // Track execution time
+    var start = Date.now();
 
     // Used for the step option
     var stepsCounter = 0;
@@ -176,8 +201,7 @@ function mergeFrames(records, options, frameDimensions) {
     // Write the headers
     gif.writeHeader();
 
-    // Foreach frame
-    async.eachOfSeries(
+    di.async.eachOfSeries(
       records,
       function (frame, index, callback) {
         if (stepsCounter != 0) {
@@ -188,7 +212,7 @@ function mergeFrames(records, options, frameDimensions) {
         stepsCounter = (stepsCounter + 1) % options.step;
 
         // The path of the rendered frame
-        var framePath = path.join(ROOT_PATH, 'render/frames', index + '.png');
+        var framePath = di.path.join(renderDir, index + ".png");
 
         // Read and parse the rendered frame
         loadPNG(framePath)
@@ -217,6 +241,9 @@ function mergeFrames(records, options, frameDimensions) {
 
         // Write the footer
         gif.finish();
+
+        // Finish
+        console.log(di.chalk.green('[merge] Process successfully completed in ' + (Date.now() - start) + 'ms.'));
         resolve();
       }
     );
@@ -266,7 +293,10 @@ function command(argv) {
   var framesCount = records.length;
 
   // The path of the output file
-  var outputFile = utility.resolveFilePath('render' + new Date().getTime(), 'gif');
+  var outputFile = di.utility.resolveFilePath(
+    "render" + Date.now(),
+    "gif"
+  );
 
   // For adjusting (calculating) the frames delays
   var adjustFramesDelaysOptions = {

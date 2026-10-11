@@ -218,7 +218,7 @@ function getGlobalDirectory() {
     return path.join(process.env.APPDATA, 'terminalizer');
   }
 
-  return path.join(process.env.HOME, '.terminalizer');
+  return di.path.join(process.env.HOME, '.config/terminalizer');
 }
 
 /**

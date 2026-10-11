@@ -21,7 +21,7 @@ import errorHandler from '../error-handler.js';
  * @param {String} url the url of the uploaded recording
  */
 function done(url) {
-  console.log(chalk.green('Successfully Uploaded'));
+  console.log(di.chalk.green('Successfully Uploaded'));
   console.log('The recording is available on the link:');
   console.log(chalk.magenta(url));
   process.exit();
@@ -50,11 +50,10 @@ function isSet(input) {
  *   - Yes: use the token
  *   - No: Generate a new one and ask the user to register it
  *
- * @param  {Object}  context
  * @return {Promise}
  */
 function getToken(context) {
-  var token = utility.getToken();
+  var token = di.utility.getToken();
 
   // Already registered
   if (token) {
@@ -97,7 +96,7 @@ function getToken(context) {
  * @return {Promise}
  */
 function getMeta(context) {
-  var platform = utility.getOS();
+  var platform = di.utility.getOS();
 
   // Already executed
   if (typeof context.getMeta != 'undefined') {
@@ -106,7 +105,7 @@ function getMeta(context) {
 
   console.log('Please enter some details about your recording');
 
-  return inquirer
+  return di.inquirer
     .prompt([
       {
         type: 'input',
@@ -123,7 +122,7 @@ function getMeta(context) {
       {
         type: 'input',
         name: 'tags',
-        message: 'Tags ' + chalk.dim('such as git,bash,game'),
+        message: 'Tags ' + di.chalk.dim('such as git,bash,game'),
         validate: isSet,
         default: platform,
       },
@@ -178,40 +177,38 @@ function shareRecording(context) {
     },
   };
 
-  return new Promise(function (resolve, reject) {
-    request(options, function (error, response, body) {
-      if (error) {
-        return reject(error);
-      }
-
+  return di
+    .axios(options)
+    .then((response) => {
       // Internal server error
-      if (response.statusCode == 500) {
-        return reject(body.errors.join('\n'));
+      if (response.status === 500) {
+        throw new Error(response.data.errors.join('\n'));
       }
 
       // Invalid input
-      if (response.statusCode == 400) {
-        return reject(body.errors.join('\n'));
+      if (response.status === 400) {
+        throw new Error(response.data.errors.join('\n'));
       }
 
       // Invalid token
-      if (response.statusCode == 401) {
-        utility.removeToken();
+      if (response.status === 401) {
+        di.utility.removeToken();
         self.jump('getToken');
-        return resolve();
+        return;
       }
 
       // Unexpected error
-      if (response.statusCode != 200) {
-        return reject(new Error('Something went wrong, try again later'));
+      if (response.status !== 200) {
+        throw new Error('Something went wrong, try again later');
       }
 
-      // Parse the response body
-      body = JSON.parse(body);
-
-      resolve(body.url);
+      // Resolve with the URL from the response body
+      return response.data.url;
+    })
+    .catch((error) => {
+      // Reject the promise with the error
+      throw error;
     });
-  });
 }
 
 /**
@@ -225,23 +222,24 @@ function command(argv) {
     require('./init.js').handler();
   }
 
-  Flowa.run(
-    {
-      // Get a token for uploading recordings
-      getToken: getToken,
+  var context = { ...argv };
 
+  // Get a token for uploading recordings
+  getToken(context)
+    .then(function (token) {
+      context.getToken = token;
       // Ask the user to enter meta data about the recording
-      getMeta: getMeta,
-
-      // Upload the recording
-      shareRecording: shareRecording,
-    },
-    argv
-  )
-    .then(function (context) {
-      done(context.shareRecording);
+      return getMeta(context);
     })
-    .catch(errorHandler);
+    .then(function (meta) {
+      context.getMeta = meta;
+      // Upload the recording
+      return shareRecording(context);
+    })
+    .then(function (url) {
+      done(url);
+    })
+    .catch(di.errorHandler);
 }
 
 ////////////////////////////////////////////////////
@@ -253,21 +251,11 @@ function command(argv) {
  *
  * @param {Object} yargs
  */
-function builder(yargs) {
+module.exports.builder = function (yargs) {
   // Define the recordingFile argument
   yargs.positional('recordingFile', {
     describe: 'the recording file',
     type: 'string',
-    coerce: _.partial(utility.resolveFilePath, _, 'yml'),
+    coerce: di._.partial(di.utility.resolveFilePath, di._, 'yml'),
   });
-}
-
-export default {
-  // Command's usage
-  command: 'share <recordingFile>',
-  // Command's description
-  describe: 'Upload a recording file and get a link for an online player',
-  // Command's handler function
-  handler: command,
-  builder,
 };

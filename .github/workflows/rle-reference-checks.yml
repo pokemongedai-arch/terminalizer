@@ -1,0 +1,22 @@
+name: Reference Checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  expected-failure:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Expected reference failure
+        run: |
+          echo "Expected reference-only failure"
+          exit 1
+  temporary-pending:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Temporary pending check
+        run: |
+          echo "Temporary reference-only pending job"
+          sleep 180
